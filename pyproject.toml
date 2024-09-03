@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "amazon reviews recommender system"
-version = "1.0.0"
+version = "1.0.1"
 description = ""
 authors = ["Oleg Podlipalin <backspace.by@gmail.com>"]
 readme = "README.md"
@@ -19,6 +19,7 @@ tensorflow = "^2.17.0"
 implicit = "^0.7.2"
 pyarrow = "^17.0.0"
 flask = "^3.0.3"
+tf-keras = "^2.17.0"
 
 
 [build-system]

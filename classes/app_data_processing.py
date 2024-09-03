@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Tuple, List
 import numpy as np
 import pandas as pd
 from config import (
@@ -26,94 +27,125 @@ class AppDataProcessor:
 
         self._load_embeddings()
         self._load_clean_data()
+        self.logger.info(f"instance of {self.__class__.__name__} class successfully initialized")
 
     def _load_embeddings(self):
-        self._ide_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IDEDF_NAME))
-        self._ip_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IPDF_NAME))
-        self._ure_df =pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UREDF_NAME))
-        self._uie_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UIEDF_NAME))
+        """Load the embedding data: 
+        - item_desc_emb_df
+        - item_price_df
+        - user_review_emb_df
+        - user_item_emb_df
+
+        Raises:
+            e: if loading attempt fails
+        """
+        self.logger.debug(f"loading embeddings from {EMBEDDINGS_PATH}")
+        try:
+            self._ide_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IDEDF_NAME))
+            self._ip_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IPDF_NAME))
+            self._ure_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UREDF_NAME))
+            self._uie_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UIEDF_NAME))
+            self.logger.info(f"embeddings successfully loaded from {EMBEDDINGS_PATH}")
+            self.logger.debug("embeddings loaded with the shape:") 
+            self.logger.debug(f"ide_df: {self._ide_df.shape}, ip_df: {self._ip_df.shape}, ure_df: {self._ure_df.shape}, uie_df: {self._uie_df.shape}")
+        except Exception as e:
+            self.logger.error(f"embeddings were not loaded due to exception: {e}")
+            raise e
 
     def _load_clean_data(self):
-        self._df = pd.read_parquet(os.path.join(DATA_PATH, DF_NAME)) 
+        """Load the clean data (clean_df)
+
+        Raises:
+            e: if loading attempt fails
+        """
+        data_path = os.path.join(DATA_PATH, DF_NAME)
+        self.logger.debug(f"loading clean data from {data_path}")
+        try:
+            self._df = pd.read_parquet(data_path)
+            self.logger.info(f"clean data successfully loaded from {data_path}")
+            self.logger.debug(f"clean data loaded with the shape: {self._df.shape}")
+        except Exception as e:
+            self.logger.error(f"clean data was not loaded due to exception: {e}")
+            raise e
         self._get_cold_start_recommendations()
     
     def _get_cold_start_recommendations(self):
+        """Calculates the list of the most popular high scored products within the last number of days (specified in config.py)
+        """
         popular = self._df[self._df["rating"] == 5].groupby("itemName")["reviewTime"].agg(["size", "max"])
         start_date = popular["max"].max() - pd.Timedelta(days=COLD_DAYS_WINDOW)
         self.cold_start_recommendations = popular[popular["max"] > start_date].sort_values("size", ascending=False)[:TOP_N].index.to_list()
+        self.logger.info(f"cold start recommendations actual for the last {COLD_DAYS_WINDOW} days extracted")
+        self.logger.debug(f"cold start recommendations: {self.cold_start_recommendations}")
 
-    def known_user(self, user):
-        return user in self._ure_df.index
+    def known_user(self, user: str) -> bool:
+        """Checks if the user appears in the list of known users (train data used)
 
-    def get_user_data(self, user):
-        self.logger.debug("preparing user data")
+        Args:
+            user (str): user name to check
+
+        Returns:
+            bool: True if user appears, False otherwise
+        """
+        search_result = user in self._ure_df.index
+        self.logger.debug(f"user: {user} found in the list of known users: {search_result}")
+        return search_result
+
+    def get_user_data(self, user: str) -> Tuple[np.ndarray|pd.DataFrame]:
+        """Creates a tuple of model input ready data for one user
+
+        Args:
+            user (str): user name to prepare data for
+
+        Returns:
+            Tuple[np.ndarray|pd.DataFrame]: a tuple that contains user_review_embedding, user_item_embedding, 
+            item_description_embedding, and item_price
+        """
+        self.logger.debug(f"preparing data for user: {user}")
         user_review_emb = np.tile(self._ure_df.loc[user], (len(self._ide_df), 1))
         user_item_emb = np.tile(self._uie_df.loc[user], (len(self._ide_df), 1))
-        return (user_review_emb, user_item_emb, self._ide_df, self._ip_df)
+        data = (user_review_emb, user_item_emb, self._ide_df, self._ip_df)
+        self.logger.debug(f"data for user {user} ready")
+        return data
 
-    def extract_recommendations(self, predictions):
+    def extract_recommendations(self, predictions: np.ndarray) -> List[str]:
+        """Extracts recommendations with the highest predicted probability
+
+        Args:
+            predictions (np.ndarray): model predictions
+
+        Returns:
+            List[str]: list or items with the highest predicted probability
+        """
+        self.logger.debug(f"extracting top {TOP_N} recommendations")
         top_indices = np.argsort(-predictions[:, 0])[:TOP_N]
-        return self._ide_df.index[top_indices].tolist()
+        recommendations = self._ide_df.index[top_indices].tolist()
+        self.logger.info(f"top recommendations: {recommendations}")
+        return recommendations
 
-    def get_random_users(self, n):
+    def get_random_users(self, n: int) -> List[str]:
+        """Randomly samples user names for the list of known users (train data used)
+
+        Args:
+            n (int): number of names to sample
+
+        Returns:
+            List[str]: list with randomly sampled user names
+        """
+        self.logger.debug(f"extracting {n} random users")
         sampled_names = np.random.choice(self._ure_df.index, size=n, replace=False)
-        return sampled_names.tolist()
+        users = sampled_names.tolist()
+        self.logger.info(f"extracted {n} random users: {users}")
+        return users
 
     def reload_embeddings(self):
+        """Forcedly reloads the embeddings data
+        """
+        self.logger.info("reloading embedding data")
         self._load_embeddings()
 
     def reload_clean_data(self):
+        """Forcedly reloads the clean data
+        """
+        self.logger.info("reloading clean data")
         self._load_clean_data()
-        
-        
-# def load_embeddings():
-#     ide_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IDEDF_NAME))
-#     ip_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, IPDF_NAME))
-#     ure_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UREDF_NAME))
-#     uie_df = pd.read_parquet(os.path.join(EMBEDDINGS_PATH, UIEDF_NAME))
-#     return ide_df, ip_df, ure_df, uie_df
-
-
-# def load_clean_data():
-#     df = pd.read_parquet(os.path.join(DATA_PATH, DF_NAME))
-#     return df
-
-
-# ide_df, ip_df, ure_df, uie_df = load_embeddings()
-# df = load_clean_data()
-
-
-# def known_user(user):
-#     return user in ure_df.index
-
-
-# def get_user_data(user):
-#     user_review_emb = np.tile(ure_df.loc[user], (len(ide_df), 1))
-#     user_item_emb = np.tile(uie_df.loc[user], (len(ide_df), 1))
-#     return (user_review_emb, user_item_emb, ide_df, ip_df)
-
-
-# def extract_recommendations(predictions):
-#     top_indices = np.argsort(-predictions[:, 0])[:TOP_N]  
-#     return ide_df.index[top_indices].tolist()
-
-
-# def get_cold_start_recommendations():
-#     popular = df[df["rating"] == 5].groupby("itemName")["reviewTime"].agg(["size", "max"])
-#     start_date = popular["max"].max() - pd.Timedelta(days=COLD_DAYS_WINDOW)
-#     return popular[popular["max"] > start_date].sort_values("size", ascending=False)[:TOP_N].index.to_list()
-
-
-# def get_random_users(n):
-#     sampled_names = np.random.choice(ure_df.index, size=n, replace=False)
-#     return sampled_names.tolist()
-
-
-# def reload_embeddings():
-#     global ide_df, ip_df, ure_df, uie_df
-#     ide_df, ip_df, ure_df, uie_df = load_embeddings()
-
-
-# def reload_clean_data():
-#     global df
-#     df = load_clean_data()
