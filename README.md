@@ -2,7 +2,9 @@
 
 ## Overview
 
-This project implements a personalized recommendation system that provides top 5 product recommendations for each user, including handling new, unknown customers effectively. The system utilizes a Flask API to manage interactions and uses advanced machine learning techniques to generate recommendations based on user and item interactions.
+This project implements a personalized recommendation system that provides top 5 product recommendations for each user, including handling new, unknown customers. The system utilizes a Flask API to manage interactions and uses advanced machine learning techniques to generate recommendations based on user and item interactions.
+
+### See also [Model Selection and Challenges](report/README.md) document in the project report directory
 
 ## Project Structure
 
@@ -23,7 +25,8 @@ This project implements a personalized recommendation system that provides top 5
 ├   └── best_model.keras        # <- *Here should be placed pretrained tensorflow model
 ├── /report                     # Jupyter notebooks for EDA and model selection
 ├   ├── eda.ipynb               # Jupyter notebook with exploratory data analysis
-├   └── model_selection.ipynb   # Jupyter notebook with data preprocessing and modeling
+├   ├── model_selection.ipynb   # Jupyter notebook with data preprocessing and modeling
+├   └── README.md               # Project documentation.
 ├── .gitignore                  # Specifies intentionally untracked files to ignore
 ├── app.py                      # Flask application entry point
 ├── config.py                   # Configuration parameters for the application
@@ -51,7 +54,7 @@ poetry install
 ```
 4. Run the download_data.sh script to populate the application with necessary data:
 ```bash
-./download_data.sh
+poetry run ./download_data.sh
 ```
 or produce this the data during running `model_selection.ipynb` jyputer notebook from `report` folder.
 > Note that this option is computationally expensive and can last more than 30 minutes (depending on the machine)
@@ -70,7 +73,7 @@ The API offers several endpoints to interact with the recommendation system:
 ### Get Random Users
 - **Endpoint:** `/random_users`
 - **Method:** GET
-- **Description:** Retrieves one or more random users from the system.
+- **Description:** Retrieves one or more random users from the system. **They can be used to check the recommendations**.
 - **Parameters:**
   - `n` (optional): Specifies the number of random users to retrieve.
 - **Example Request**:
@@ -151,16 +154,3 @@ The API offers several endpoints to interact with the recommendation system:
         "status": "Model reloaded successfully."
     }
 ```
-
-## Model Selection and Challenges
-
-The project aims to build a robust recommendation system, exploring two models:
-1. A Neural Network based on embedded item and user information.
-2. An Alternating Least Squares model using matrix factorization techniques.
-
-Key challenges addressed:
-- Dealing with unbalanced data through undersampling.
-- Managing new or unknown users effectively.
-- Optimizing model performance with respect to computational resources and maintainability.
-
-The chosen model, a Neural Network, demonstrates better results in terms of AUC and adaptability for future improvements, such as integrating external data sources to enhance the recommendation quality.
